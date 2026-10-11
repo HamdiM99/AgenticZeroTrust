@@ -1,0 +1,26 @@
+// Types of everything the policy can see. Policies are validated against this schema in CI.
+entity Agent = { scopes: Set<String> };
+
+entity Beneficiary = {
+  iban: String,
+  registry_verified: Bool,
+  sanctioned: Bool
+};
+
+action transfer appliesTo {
+  principal: Agent,
+  resource: Beneficiary,
+  context: {
+    amount_cents: Long,
+    source: String,
+    currency: String,
+    approval_valid: Bool,
+    killed: Bool,
+    velocity_exceeded: Bool,
+    task_max_cents: Long,
+    task_spent_cents: Long,
+    task_beneficiary: String,
+    task_source: String,
+    task_currency: String
+  }
+};
