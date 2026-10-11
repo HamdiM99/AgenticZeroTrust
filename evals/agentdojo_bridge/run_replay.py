@@ -17,7 +17,8 @@ from agentdojo.agent_pipeline.base_pipeline_element import BasePipelineElement
 from agentdojo.agent_pipeline.ground_truth_pipeline import GroundTruthPipeline
 from agentdojo.task_suite.load_suites import get_suite
 
-from evals.agentdojo_bridge.guard import MONEY_TOOLS, GuardConfig, op_key, runtime_factory
+from azt.util import norm_iban
+from evals.agentdojo_bridge.guard import ACCOUNT_TOOLS, MONEY_TOOLS, GuardConfig, op_key, runtime_factory
 
 VERSION = "v1.2"
 CONFIGS = [  # (label, mandate, human); None = no control plane
@@ -58,11 +59,25 @@ def expected_ops(user_task, pre_env) -> set[tuple]:
     return ops
 
 
-def guarded(ut, exp, mandate, human) -> tuple[dict, GuardConfig | None]:
-    """Runtime kwargs for `run_task_with_pipeline` (a fresh control plane per run) + its stats holder."""
+def attack_targets(injection_task, pre_env) -> set[str]:
+    """What the attacker is after, from the injection task's ground truth: payee IBANs and account tools."""
+    if injection_task is None:
+        return set()
+    targets = set()
+    for call in injection_task.ground_truth(pre_env):
+        if call.function in MONEY_TOOLS and isinstance(call.args.get("recipient"), str):
+            targets.add(norm_iban(call.args["recipient"]))
+        elif call.function in ACCOUNT_TOOLS:
+            targets.add(call.function)
+    return targets
+
+
+def guarded(ut, exp, mandate, human, targets=frozenset()) -> tuple[dict, GuardConfig | None]:
+    """Runtime kwargs for `run_task_with_pipeline` (a fresh control plane per run) + its stats holder.
+    mandate=None: no runtime at all; mandate="off": no enforcement, attack attempts are only observed."""
     if mandate is None:
         return {}, None
-    cfg = GuardConfig(prompt=ut.PROMPT, mandate=mandate, human=human, expected_ops=exp)
+    cfg = GuardConfig(prompt=ut.PROMPT, mandate=mandate, human=human, expected_ops=exp, attack_targets=set(targets))
     return {"runtime_class": runtime_factory(cfg)}, cfg
 
 
