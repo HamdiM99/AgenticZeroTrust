@@ -47,6 +47,21 @@ def run_one(suite, pipeline, ut, it, injections, mandate, human) -> dict:
             "stats": cfg.stats if cfg else None}
 
 
+def make_llm(model: str):
+    """AgentDojo knows models by name; recent Claude models need a hand-built element because they reject
+    AgentDojo's default `temperature=0` and are missing from its model registry."""
+    if not model.startswith("claude-"):
+        return model
+    from agentdojo import models
+    from agentdojo.agent_pipeline.llms.anthropic_llm import AnthropicLLM
+    from anthropic import AsyncAnthropic
+
+    models.MODEL_NAMES.setdefault(model, "Claude")  # how the attack addresses the model ("Claude")
+    llm = AnthropicLLM(AsyncAnthropic(), model, temperature=None, max_tokens=16_000)
+    llm.name = model
+    return llm
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="gpt-4o-mini-2024-07-18")
@@ -59,7 +74,7 @@ def main() -> None:
 
     suite = get_suite(VERSION, "banking")
     pipeline = AgentPipeline.from_config(PipelineConfig(
-        llm=args.model, model_id=None, defense=None, system_message_name=None, system_message=None))
+        llm=make_llm(args.model), model_id=None, defense=None, system_message_name=None, system_message=None))
     attack = load_attack(args.attack, suite, pipeline)
     user_tasks = list(suite.user_tasks.values())[: args.limit]
 

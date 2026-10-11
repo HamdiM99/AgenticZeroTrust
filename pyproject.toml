@@ -14,7 +14,8 @@ dependencies = ["cedarpy>=4.0"]
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.5"]
 llm = ["anthropic>=0.40"]
-agentdojo = ["agentdojo>=0.1.35"]
+# agentdojo 0.1.x passes `temperature` to messages.stream(), which anthropic 1.x removed
+agentdojo = ["agentdojo>=0.1.35", "anthropic<1"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
