@@ -4,4 +4,4 @@ __pycache__/
 .ruff_cache/
 .venv/
 .env
-examples/.managed_agent_ids.json
+integrations/claude_managed_agents/.managed_agent_ids.json

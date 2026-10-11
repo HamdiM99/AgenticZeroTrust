@@ -26,4 +26,4 @@ pythonpath = ["."]  # so tests can import the top-level `evals` package with pla
 
 [tool.ruff]
 line-length = 110
-src = ["src", "tests", "evals", "examples"]
+src = ["src", "tests", "evals", "examples", "integrations"]

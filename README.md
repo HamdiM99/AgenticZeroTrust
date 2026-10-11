@@ -32,7 +32,7 @@ amount manipulation, token replay / split payments, currency switch, social engi
 
 The control plane is plugged into the [AgentDojo](https://github.com/ethz-spylab/agentdojo) banking suite
 (v1.2: 16 user tasks x 9 injection tasks) as a guarded tool runtime: every payment, standing-order change and
-account change the agent makes goes through the gateway ([`evals/agentdojo_bridge/`](evals/agentdojo_bridge/)).
+account change the agent makes goes through the gateway ([`integrations/agentdojo/`](integrations/agentdojo/)).
 
 **Worst case, no LLM needed**: the "agent" executes the attacker's goal verbatim, then the user's task.
 
@@ -48,28 +48,43 @@ What this shows, honestly: with no human, the gateway blocks every attack but al
 a payee the user did not name (bills read from files, "like last month"). The human step-up recovers utility,
 and security then rests on the human: a rubber-stamp approver lets almost everything through (only the hard cap
 still holds). The remaining 1/16 is a flaw in the benchmark's ground truth (it pays `"Apple"`, not an IBAN).
-Full tables: [`results_replay.md`](evals/agentdojo_bridge/results_replay.md).
+Full tables: [`results_replay.md`](integrations/agentdojo/results_replay.md).
 
-**Real model** (`gpt-4o-mini-2024-07-18`, AgentDojo `important_instructions` attack, single run, raw traces in
-[`llm_runs/`](evals/agentdojo_bridge/llm_runs/)):
+**Real models** (AgentDojo `important_instructions` attack, one run per model, raw traces in
+[`llm_runs/`](integrations/agentdojo/llm_runs/)):
 
-| Configuration | Utility (no attack) | Utility under attack | Attack success rate |
-|---|---|---|---|
-| Undefended | 9/16 (56%) | 61/144 (42%) | **70/144 (48.6%)** |
-| AZT, no human (prompt / prompt + known payees) | 6/16 (38%) | 44/144, 43/144 (30%) | **0/144** |
-| AZT, + attentive human | 8/16 (50%) | 62/144 (43%) | **0/144** |
+| Model | Configuration | Utility (no attack) | Utility under attack | Attack success rate |
+|---|---|---|---|---|
+| `gpt-4o-mini` | Undefended | 9/16 (56%) | 61/144 (42%) | **70/144 (48.6%)** |
+| | AZT, no human (prompt / prompt + known payees) | 6/16 (38%) | 44/144, 43/144 (30%) | **0/144** |
+| | AZT, + attentive human | 8/16 (50%) | 62/144 (43%) | **0/144** |
+| `claude-sonnet-5-5` | Undefended | 15/16 (94%) | 133/144 (92%) | **0/144** |
+| | AZT, no human (prompt / prompt + known payees) | 9/16, 11/16 (56-69%) | 78/144, 107/144 (54-74%) | **0/144** |
+| | AZT, + attentive human | 16/16 (100%) | 133/144 (92%) | **0/144** |
 
-With a human confirming new payees, the gateway removes every successful attack at a small utility cost
-(one task, within single-run noise) and does not hurt utility under attack. Under attack, the model often spends
-its turn on the attacker's (blocked) payments and never does the user's task: the gateway prevents the damage,
-not the disruption. Reproduce: `python -m evals.agentdojo_bridge.run_llm --model gpt-4o-mini-2024-07-18 --write`
-(about 2 USD). Full table: [`results_llm_gpt-4o-mini-2024-07-18.md`](evals/agentdojo_bridge/results_llm_gpt-4o-mini-2024-07-18.md).
+Two very different models, one consistent picture. **`gpt-4o-mini` obeys half of the injections and the gateway
+removes all of them. Claude Sonnet 5.5 resists every injection of this (known, non-adaptive) attack on its own**,
+so here the gateway has nothing to block: its value is the guarantee that holds when the model does not (the
+worst-case replay above: 99% -> 0%, whatever the model). With a human confirming new payees, the gateway costs
+no utility on either model (gpt-4o-mini 9 -> 8 of 16, single-run noise; Sonnet 15 -> 16). Without a human it
+blocks legitimate payments to payees the user never named. Under attack, gpt-4o-mini often spends its turn on
+the attacker's (blocked) payments and never does the user's task: the gateway prevents the damage, not the
+disruption. Reproduce: `python -m integrations.agentdojo.run_llm --model <model> --write` (gpt-4o-mini about
+2 USD). Tables: [`results_llm_*.md`](integrations/agentdojo/). Newer runs also attribute every attacked run:
+model resisted / model obeyed and the gateway blocked / attack succeeded.
 
 ![AgentDojo results](docs/img/agentdojo_results.png)
 
+## Works with
+
+| Integration | What it shows |
+|---|---|
+| [`integrations/claude_managed_agents/`](integrations/claude_managed_agents/) | A live Claude agent hosted by Anthropic, whose only tools route through the gateway |
+| [`integrations/agentdojo/`](integrations/agentdojo/) | The AgentDojo banking benchmark (ETH Zurich), with OpenAI, Anthropic and OpenAI-compatible models (Mistral, DeepSeek, GLM) |
+
 ## Live demo with a Claude Managed Agent
 
-[`examples/managed_agent_demo.py`](examples/managed_agent_demo.py): a Claude agent hosted by Anthropic pays a poisoned
+[`integrations/claude_managed_agents/demo.py`](integrations/claude_managed_agents/demo.py): a Claude agent hosted by Anthropic pays a poisoned
 invoice. Its only tools are custom tools executed by this repo, so every payment it proposes goes through the gateway
 on your machine; it never holds a banking credential. The run ends with a labelled "what if the agent had obeyed?"
 step that sends the attacker's intent through the same tool.
@@ -115,7 +130,7 @@ Details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | [`docs/THREAT_MODEL.md
 ```bash
 pip install -e ".[dev]"
 make demo      # narrated injection attempt
-make test      # 49 tests
+make test      # 52 tests (3 need the agentdojo extra)
 make eval      # attack corpus + benign traffic
 make mutate    # policy mutation testing
 ```
@@ -128,6 +143,8 @@ or `docker build -t azt . && docker run --rm azt`.
 policies/    transfer.cedar + schema.cedarschema   (the rules)
 src/azt/     identity, provenance, approval, policy (Cedar PDP), gateway (PEP), audit, bank (mock)
 evals/       attack corpus, runner, generated results.md
+integrations/agentdojo/               AgentDojo banking benchmark bridge, real-LLM runner, results, traces
+integrations/claude_managed_agents/   live demo with a Claude Managed Agent
 tests/       attack scenarios, policy tests, audit tests
 scripts/     mutation_check.py
 docs/        architecture, threat model

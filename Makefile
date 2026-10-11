@@ -12,5 +12,5 @@ mutate:
 demo:
 	python examples/demo.py
 agentdojo:
-	python -m evals.agentdojo_bridge.run_replay --write
+	python -m integrations.agentdojo.run_replay --write
 all: lint test eval mutate
