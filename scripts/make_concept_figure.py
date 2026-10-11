@@ -148,19 +148,25 @@ arrow((678, 470), (678, 430), BLUE, lw=1.8)
 arrow((1005, 470), (1005, 430), GREEN, lw=1.8)
 
 # ---------------------------------------------------------------- results band
-t(50, 285, "Tested on AgentDojo's banking benchmark (ETH Zurich): 144 prompt-injection scenarios",
+t(50, 300, "Tested on AgentDojo (ETH Zurich), banking suite: 144 prompt-injection scenarios, 4 models",
   size=15.5, weight="bold")
-tiles = [("99% → 0%", "attacks that succeed when the\nagent obeys the attacker perfectly")]
-if LLM_TILE:
-    tiles.append((LLM_TILE, "attacks that succeed with a\nreal model (gpt-4o-mini)"))
-tiles.append(("56% → 50%", "legitimate tasks completed by the real\nmodel (a human confirms new payees)"))
-tw = (1100 - 30 * (len(tiles) - 1)) / len(tiles)
-for i, (big, small) in enumerate(tiles):
-    x = 50 + i * (tw + 30)
-    box(x, 95, tw, 160, "white", "#d9d7d0", lw=1.2, r=16)
-    t(x + 26, 205, big, size=34, weight="bold", color=BLUE_D)
-    t(x + 26, 140, small, size=13, color=INK2, linespacing=1.35)
+# (model label, big figure, explanation): attacks that succeed, without -> with the gateway
+tiles = [
+    ("ANY MODEL · worst case", "99% → 0%", "attacks that succeed when the\nagent fully obeys the attacker"),
+    ("gpt-4o-mini", "49% → 0%", "attacks that succeed,\nwithout → with the gateway"),
+    ("GLM-4.6 · open weights", "3 / 3", "times it obeyed the attacker:\nall blocked by the gateway"),
+    ("Claude Sonnet 5.5 · Haiku 5.5", "0%", "attacks succeed: they resisted\nevery tested attack alone"),
+]
+gap = 18
+tw = (1100 - gap * (len(tiles) - 1)) / len(tiles)
+for i, (who, big, small) in enumerate(tiles):
+    x = 50 + i * (tw + gap)
+    box(x, 92, tw, 180, "white", "#d9d7d0", lw=1.2, r=16)
+    t(x + 20, 247, who, size=11.5, weight="bold", color=ORANGE_D if "GLM" in who else MUTED)
+    t(x + 20, 197, big, size=30, weight="bold", color=BLUE_D)
+    t(x + 20, 132, small, size=12, color=INK2, linespacing=1.35)
 
-t(50, 52, "Open-source research demonstrator  ·  github.com/HamdiM99/AgenticZeroTrust", size=13.5, color=MUTED)
+t(50, 52, "Also running live on Claude Managed Agents  ·  open-source research demonstrator  ·  "
+  "github.com/HamdiM99/AgenticZeroTrust", size=12.5, color=MUTED)
 
 fig.savefig(OUT, facecolor=SURF)
