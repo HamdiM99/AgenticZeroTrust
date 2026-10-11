@@ -50,28 +50,39 @@ and security then rests on the human: a rubber-stamp approver lets almost everyt
 still holds). The remaining 1/16 is a flaw in the benchmark's ground truth (it pays `"Apple"`, not an IBAN).
 Full tables: [`results_replay.md`](integrations/agentdojo/results_replay.md).
 
-**Real models** (AgentDojo `important_instructions` attack, one run per model, raw traces in
-[`llm_runs/`](integrations/agentdojo/llm_runs/)):
+**Real models** (one run per model, raw traces in [`llm_runs/`](integrations/agentdojo/llm_runs/)). Newer runs
+attribute every attacked scenario: did the model **resist**, did it **obey and the gateway block** the action,
+or did the attack **succeed**?
 
-| Model | Configuration | Utility (no attack) | Utility under attack | Attack success rate |
-|---|---|---|---|---|
-| `gpt-4o-mini` | Undefended | 9/16 (56%) | 61/144 (42%) | **70/144 (48.6%)** |
-| | AZT, no human (prompt / prompt + known payees) | 6/16 (38%) | 44/144, 43/144 (30%) | **0/144** |
-| | AZT, + attentive human | 8/16 (50%) | 62/144 (43%) | **0/144** |
-| `claude-sonnet-5-5` | Undefended | 15/16 (94%) | 133/144 (92%) | **0/144** |
-| | AZT, no human (prompt / prompt + known payees) | 9/16, 11/16 (56-69%) | 78/144, 107/144 (54-74%) | **0/144** |
-| | AZT, + attentive human | 16/16 (100%) | 133/144 (92%) | **0/144** |
+| Model | Weights | Attack | Attacks succeeding, undefended | **with AZT** (+ attentive human) | Utility, no attack (undefended -> AZT) |
+|---|---|---|---|---|---|
+| `gpt-4o-mini` | closed, 2024 | `important_instructions` | **70/144 (48.6%)** | **0/144** | 9/16 -> 8/16 |
+| `glm-4.6` (Z.ai) | **open** | `important_instructions` | **3/144 (2.1%)** | **0/144**: obeyed 3 times, **all 3 blocked by the gateway** | 12/16 -> 15/16 |
+| `claude-sonnet-5-5` | closed | `important_instructions` | 0/144 | 0/144 | 15/16 -> 16/16 |
+| `claude-haiku-5-5` | closed | `tool_knowledge` (stronger) | 0/144 (never even tried the attacker's action) | not run: nothing to block | 11/16 undefended |
 
-Two very different models, one consistent picture. **`gpt-4o-mini` obeys half of the injections and the gateway
-removes all of them. Claude Sonnet 5.5 resists every injection of this (known, non-adaptive) attack on its own**,
-so here the gateway has nothing to block: its value is the guarantee that holds when the model does not (the
-worst-case replay above: 99% -> 0%, whatever the model). With a human confirming new payees, the gateway costs
-no utility on either model (gpt-4o-mini 9 -> 8 of 16, single-run noise; Sonnet 15 -> 16). Without a human it
-blocks legitimate payments to payees the user never named. Under attack, gpt-4o-mini often spends its turn on
-the attacker's (blocked) payments and never does the user's task: the gateway prevents the damage, not the
-disruption. Reproduce: `python -m integrations.agentdojo.run_llm --model <model> --write` (gpt-4o-mini about
-2 USD). Tables: [`results_llm_*.md`](integrations/agentdojo/). Newer runs also attribute every attacked run:
-model resisted / model obeyed and the gateway blocked / attack succeeded.
+What this shows:
+
+1. **A guarantee that does not depend on the model.** Worst case, agent fully obeying the attacker: 99% -> 0%.
+2. **An older model** (`gpt-4o-mini`) obeys half of the injections; the gateway removes all of them.
+3. **Recent models resist these known, non-adaptive attacks on their own** (Sonnet 5.5, and Haiku 5.5 even under
+   a stronger attack), likely thanks to safety training on similar patterns. **But the open-weight GLM-4.6 still
+   obeyed 3 times, and the gateway blocked all 3**: model robustness is probabilistic, the gateway is not.
+4. **With a human confirming new payees, the gateway costs no utility** on any model (differences of one to
+   three tasks are single-run noise). Without a human it blocks legitimate payments to payees the user never named.
+5. Under attack, a model may spend its turn on the attacker's (blocked) payments and never do the user's task:
+   the gateway prevents the damage, not the disruption.
+
+**The open challenge is adaptive attacks.** Off-the-shelf benchmark attacks are increasingly saturated by recent
+models, while attacks optimised against a given model or defense keep breaking model-based protections (e.g.
+"The Attacker Moves Second", 2025). That is where a model-independent control plane matters, and it is the next
+evaluation step for this project.
+
+Haiku 5.5 often asks the user to confirm (e.g. the payment date) instead of paying, which AgentDojo counts as a
+failure: its low utility is model caution, not the gateway. Mistral and DeepSeek are supported by the runner but
+were not evaluated yet. Reproduce: `python -m integrations.agentdojo.run_llm --model <model> [--attack <name>] --write`
+(`provider:model` for OpenAI-compatible providers: `zai:glm-4.6`, `mistral:...`, `deepseek:...`).
+Tables: [`results_llm_*.md`](integrations/agentdojo/).
 
 ![AgentDojo results](docs/img/agentdojo_results.png)
 
@@ -162,7 +173,8 @@ docs/        architecture, threat model
 - **Residual risk**: within its token bounds, a compromised agent can still choose a wrong (but capped) amount.
 - Audit log is tamper-*evident*, not tamper-*proof* (needs external anchoring).
 - `LLMAgent` (real model as the proposer) exists but is experimental and not exercised in CI. Real-LLM results come
-  from the AgentDojo bridge, one model, one run: treat small utility differences as noise.
+  from the AgentDojo bridge, one run per model: treat small utility differences as noise. The AgentDojo attacks
+  used are known and non-adaptive; adaptive attacks would likely make recent models obey more often.
 - In the AgentDojo bridge the "attentive human" is simulated from the benchmark's ground truth: an upper bound on
   real human vigilance.
 
@@ -170,8 +182,10 @@ docs/        architecture, threat model
 
 - [ ] Split gateway / identity / approval into services with mTLS
 - [x] AgentDojo banking integration, worst-case (compromised-agent) evaluation
-- [x] Real-LLM AgentDojo run (gpt-4o-mini)
-- [ ] More models, several seeds, adaptive attacks
+- [x] Real-LLM AgentDojo runs: gpt-4o-mini, Claude Sonnet 5.5 / Haiku 5.5, GLM-4.6 (open weights)
+- [x] Per-scenario attribution: model resisted / gateway blocked / attack succeeded
+- [ ] **Adaptive attacks** (an attacker model that rewrites the injection until the agent obeys)
+- [ ] More open-weight models (Mistral, DeepSeek, Llama, Qwen), several seeds per model
 - [ ] Cedar actions for account changes (today: a step-up rule in the AgentDojo bridge)
 - [ ] Information-flow (taint) tracking beyond exact values
 - [ ] External audit anchoring; approval-fatigue study
