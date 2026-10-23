@@ -6,6 +6,9 @@ The agent *proposes*; the control plane *disposes*. No LLM is ever in the author
 
 ![The agent proposes, the control plane decides](docs/img/concept.png)
 
+> **Generalisation:** [intentplane](https://github.com/HamdiM99/intentplane) is the domain-independent version of
+> this control plane (banking, accounts payable, health, code), with the same AgentDojo evaluation.
+
 > Research demonstrator, fictional data only. Not production software. Makes no compliance claims (DORA, PCI, ...).
 
 ## The problem
